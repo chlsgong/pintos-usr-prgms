@@ -36,7 +36,10 @@ process_execute (const char *file_name)
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
+
   strlcpy (fn_copy, file_name, PGSIZE);
+
+
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
@@ -88,6 +91,9 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  while(1) {
+    // return -1;
+  }
   return -1;
 }
 
@@ -195,7 +201,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, const char*);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -208,6 +214,9 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
+  //   char msg[100];
+  // snprintf(msg, 100, "filename: %s\n", file_name);
+  // puts(msg);
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
@@ -302,7 +311,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, file_name))
     goto done;
 
   /* Start address. */
@@ -427,20 +436,59 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, const char* file_name) 
 {
   uint8_t *kpage;
   bool success = false;
+  char *token, *save_ptr, *file_cpy, *my_esp;
+  char **argv;
+  void *ret;
+  int i, argc, index;
+  size_t token_len;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE;
+        *esp = PHYS_BASE - 12;
       else
         palloc_free_page (kpage);
     }
+
+  strlcpy(file_cpy, file_name, strlen(file_name));
+  argc = 0;
+  index = 0;
+  for (token = strtok_r (file_cpy, " ", &save_ptr); token != NULL; 
+    token = strtok_r (NULL, " ", &save_ptr)) {
+    // create array
+    (argv[index]) = token;
+    index++;
+    argc++;
+  }
+  my_esp = (char*) *esp;
+  for(i = index; i >= 0; i--) {
+    token_len = strlen(*argv[index]) + 1;
+    my_esp -= token_len; // allocate token size
+    my_esp -= token_len % 4; // align stack
+    *my_esp = token; // push onto stack
+  }
+  my_esp -= 4;
+  *my_esp = NULL;
+  for(i = index; i >= 0; i--) {
+    my_esp -= 4;
+    *my_esp = &(argv[index]);
+  }
+  my_esp -= 4;
+  *my_esp = argv;
+  my_esp -= 4;
+  *my_esp = argc;
+  my_esp -= 4;
+  *my_esp = ret;
+
+  *esp = my_esp;
+
+  // hex_dump(*esp, *esp, PHYS_BASE - *esp, 1);
   return success;
 }
 

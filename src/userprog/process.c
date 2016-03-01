@@ -440,8 +440,8 @@ setup_stack (void **esp, const char* file_name)
 {
   uint8_t *kpage;
   bool success = false;
-  char *token, *save_ptr, *file_cpy, *my_esp;
-  char **argv;
+  char *token, *save_ptr, file_cpy[strlen(file_name) + 1], *my_esp;
+  char *argv[32];
   void *ret;
   int i, argc, index;
   size_t token_len;
@@ -462,29 +462,29 @@ setup_stack (void **esp, const char* file_name)
   for (token = strtok_r (file_cpy, " ", &save_ptr); token != NULL; 
     token = strtok_r (NULL, " ", &save_ptr)) {
     // create array
-    (argv[index]) = token;
+    argv[index] = token;
     index++;
     argc++;
   }
   my_esp = (char*) *esp;
   for(i = index; i >= 0; i--) {
-    token_len = strlen(*argv[index]) + 1;
+    token_len = strlen(argv[index]) + 1;
     my_esp -= token_len; // allocate token size
     my_esp -= token_len % 4; // align stack
-    *my_esp = token; // push onto stack
+    my_esp = token; // push onto stack
   }
   my_esp -= 4;
-  *my_esp = NULL;
+  my_esp = NULL;
   for(i = index; i >= 0; i--) {
     my_esp -= 4;
-    *my_esp = &(argv[index]);
+    my_esp = argv[index];
   }
   my_esp -= 4;
-  *my_esp = argv;
+  my_esp = *argv;
   my_esp -= 4;
-  *my_esp = argc;
+  *(int *)my_esp = argc;
   my_esp -= 4;
-  *my_esp = ret;
+  my_esp = ret;
 
   *esp = my_esp;
 

@@ -91,10 +91,29 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  while(1) {
-    // return -1;
-  }
+  // int valid = 0;
+  // struct list_elem *e;
+
+  // for (e = list_begin (&all_list); 
+  //      e != list_end (&all_list);
+  //      e = list_next (e))
+  //   {
+  //     struct thread *t = list_entry (e, struct thread, allelem);
+  //     //Check if thead is valid
+  //     if(t->tid == child_tid) {
+  //       valid = 1;
+  //       break;
+  //     }
+  //   }
+  //   //Checking if thread is child
+  //   if()
+  
+  // if(!valid)
+  //   return -1;
+  while(1)
+  {}
   return -1;
+
 }
 
 /* Free the current process's resources. */
@@ -214,15 +233,15 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
-  //   char msg[100];
-  // snprintf(msg, 100, "filename: %s\n", file_name);
-  // puts(msg);
+  char msg[100];
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
   off_t file_ofs;
   bool success = false;
   int i;
+  char *token, *save_ptr;
+  char file_cpy[strlen(file_name)+1];
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -231,7 +250,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  strlcpy(file_cpy, file_name, strlen(file_name)+1);
+  token = strtok_r (file_cpy, " ", &save_ptr);
+  file = filesys_open (token);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -440,9 +461,9 @@ setup_stack (void **esp, const char* file_name)
 {
   uint8_t *kpage;
   bool success = false;
-  char *token, *save_ptr, file_cpy[strlen(file_name) + 1], *my_esp;
+  char *token, *save_ptr, *my_esp, *ret = "0";
   char *argv[32];
-  void *ret;
+  char file_cpy[strlen(file_name)+1];
   int i, argc, index;
   size_t token_len;
 
@@ -456,39 +477,45 @@ setup_stack (void **esp, const char* file_name)
         palloc_free_page (kpage);
     }
 
-  strlcpy(file_cpy, file_name, strlen(file_name));
+  strlcpy(file_cpy, file_name, strlen(file_name)+1);
   argc = 0;
   index = 0;
   for (token = strtok_r (file_cpy, " ", &save_ptr); token != NULL; 
     token = strtok_r (NULL, " ", &save_ptr)) {
     // create array
+    printf("token = %s\n", token);
     argv[index] = token;
     index++;
     argc++;
   }
+
   my_esp = (char*) *esp;
+  index--;
+  printf("index: %d, argc: %d\n", index, argc);
   for(i = index; i >= 0; i--) {
-    token_len = strlen(argv[index]) + 1;
+    token_len = strlen(argv[i]) + 1;
+    // printf("token_len: %d, argv[i]: %s\n", token_len, argv[i]);
     my_esp -= token_len; // allocate token size
-    my_esp -= token_len % 4; // align stack
-    my_esp = token; // push onto stack
+    // my_esp -= token_len % 4; // align stack
+    strlcpy(my_esp, argv[i], token_len); // push onto stack
   }
   my_esp -= 4;
-  my_esp = NULL;
+  *my_esp = NULL;
   for(i = index; i >= 0; i--) {
     my_esp -= 4;
-    my_esp = argv[index];
+    memcpy(my_esp, argv[i], 4);
   }
+
   my_esp -= 4;
-  my_esp = *argv;
+  memcpy(my_esp, argv[0], 4);
   my_esp -= 4;
   *(int *)my_esp = argc;
   my_esp -= 4;
-  my_esp = ret;
+  memcpy(my_esp, ret, 4);
 
   *esp = my_esp;
 
-  // hex_dump(*esp, *esp, PHYS_BASE - *esp, 1);
+  hex_dump(*esp, *esp, PHYS_BASE - *esp, 1);
   return success;
 }
 

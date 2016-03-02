@@ -233,7 +233,6 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
-  char msg[100];
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
@@ -465,45 +464,43 @@ setup_stack (void **esp, const char* file_name)
   char *argv[32];
   char file_cpy[strlen(file_name)+1];
   int i, argc, index;
-  size_t token_len;
+  size_t token_len, arg_bytes = 0;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE - 12;
+        *esp = PHYS_BASE;
       else
         palloc_free_page (kpage);
     }
 
   strlcpy(file_cpy, file_name, strlen(file_name)+1);
   argc = 0;
-  index = 0;
   for (token = strtok_r (file_cpy, " ", &save_ptr); token != NULL; 
     token = strtok_r (NULL, " ", &save_ptr)) {
     // create array
-    printf("token = %s\n", token);
-    argv[index] = token;
-    index++;
+    argv[argc] = token;
     argc++;
   }
 
   my_esp = (char*) *esp;
-  index--;
-  printf("index: %d, argc: %d\n", index, argc);
-  for(i = index; i >= 0; i--) {
+  for(i = argc-1; i >= 0; i--) {
     token_len = strlen(argv[i]) + 1;
-    // printf("token_len: %d, argv[i]: %s\n", token_len, argv[i]);
+    arg_bytes += token_len;
     my_esp -= token_len; // allocate token size
-    // my_esp -= token_len % 4; // align stack
+    int* address = (int *)my_esp;
     strlcpy(my_esp, argv[i], token_len); // push onto stack
+    argv[i] = address;
   }
+  my_esp -= arg_bytes % 4; // align stack
   my_esp -= 4;
   *my_esp = NULL;
-  for(i = index; i >= 0; i--) {
+  for(i = argc-1; i >= 0; i--) {
     my_esp -= 4;
-    memcpy(my_esp, argv[i], 4);
+    memcpy(my_esp, &argv[i], sizeof(int));
+    my_esp -= 1;
   }
 
   my_esp -= 4;

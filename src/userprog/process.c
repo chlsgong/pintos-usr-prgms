@@ -460,10 +460,11 @@ setup_stack (void **esp, const char* file_name)
 {
   uint8_t *kpage;
   bool success = false;
-  char *token, *save_ptr, *my_esp, *ret = "0";
+  char *token, *save_ptr, *my_esp;
   char *argv[32];
   char file_cpy[strlen(file_name)+1];
-  int i, argc, index;
+  int i, argc;
+  int* address;
   size_t token_len, arg_bytes = 0;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
@@ -490,25 +491,22 @@ setup_stack (void **esp, const char* file_name)
     token_len = strlen(argv[i]) + 1;
     arg_bytes += token_len;
     my_esp -= token_len; // allocate token size
-    int* address = (int *)my_esp;
-    strlcpy(my_esp, argv[i], token_len); // push onto stack
-    argv[i] = address;
+    strlcpy(my_esp, argv[i], token_len); // push arg onto stack
+    address = (int *) my_esp;
+    argv[i] = address; // save address
   }
-  my_esp -= arg_bytes % 4; // align stack
-  my_esp -= 4;
-  *my_esp = NULL;
+  my_esp -= (4 - (arg_bytes % 4)); // align stack
+  my_esp -= 4; // null sentinel
   for(i = argc-1; i >= 0; i--) {
     my_esp -= 4;
-    memcpy(my_esp, &argv[i], sizeof(int));
-    my_esp -= 1;
+    memcpy(my_esp, &argv[i], sizeof(int)); // push address onto stack
   }
-
+  address = (int *) my_esp;
   my_esp -= 4;
-  memcpy(my_esp, argv[0], 4);
+  memcpy(my_esp, &address, sizeof(int));
   my_esp -= 4;
-  *(int *)my_esp = argc;
+  *my_esp = argc;
   my_esp -= 4;
-  memcpy(my_esp, ret, 4);
 
   *esp = my_esp;
 

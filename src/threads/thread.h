@@ -106,7 +106,9 @@ struct thread
     int lockCount;                      /*How many locks are*/
     int old_priority;                   /*Original thread's priority*/
     int donate;                         /*If set, do multilevel donation*/
-
+    struct thread *parent_process;      /*The parent process that created this thread.*/ 
+    struct list children;               /*List of child processes*/
+    struct list_elem child_elem;   /*Places into parent's children list*/
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

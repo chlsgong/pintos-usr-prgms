@@ -199,6 +199,10 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
+  
+  // Setting parent_process
+  t->parent_process = thread_current();
+  list_push_back(&thread_current()->children, &t->child_elem);
 
   /* Add to run queue. */
   //If new thread's priority is higher than current thread...

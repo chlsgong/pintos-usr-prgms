@@ -46,22 +46,25 @@ syscall_handler (struct intr_frame *f)
   unsigned size;
   const char *write_buffer;
   unsigned position;
-  
-  int syscall = *(int *)(f->esp);
-  //f->esp += sizeof(int);
-  // printf("syscall %d\n", syscall);
+  int syscall;
+
+  valid_pointer(f->esp);
+  syscall = *(int *)(f->esp);
+
   switch(syscall) {
   	case(SYS_HALT):
   		halt();
   		break;
   	case(SYS_EXIT):
   		/*Read from stack once*/
+      valid_pointer(f->esp + 4);
   		status = *(int *)(f->esp + 4);
   		exit(status);
   		break;
   	case(SYS_EXEC):
   		/*Read from stack to get file pointer, check if valid*/
-  		file = f->esp + 4;
+      valid_pointer(f->esp + 4);
+  		file = *(char **)(f->esp + 4);
   		exec(file);
   		break;
   	case(SYS_WAIT):
@@ -105,12 +108,9 @@ syscall_handler (struct intr_frame *f)
   	case(SYS_WRITE):
   		/*Read from stack 3 times, check if buffer is valid*/
   		fd = *(int *)(f->esp + 4);
-      //printf("fd: %d\n", fd);
   		write_buffer = *(char**)(f->esp + 8);
-      //printf("write_buffer: %x\n", write_buffer);
   		size = *(unsigned *)(f->esp + 12);
   		write(fd, write_buffer, size);
-      //printf("return\n");
   		break;
   	case(SYS_SEEK):
   		/*Read from stack twice*/
@@ -142,7 +142,7 @@ int valid_pointer(const void *pointer) {
 	struct thread *cur_thread = thread_current();
 	if(pointer == NULL || is_kernel_vaddr(pointer) ||
 	  pagedir_get_page (cur_thread->pagedir, pointer) == NULL) {
-		thread_exit();
+		exit(-1);
 		return 0;
 	}
 	return 1;
@@ -156,7 +156,6 @@ void halt () {
 void exit (int status) {
   thread_current()->exit_status = status;
   printf("%s: exit(%d)\n", thread_current()->file_name, status);
-  // sema down and wait before exiting /////////////////
   sema_up(&thread_current()->process_sema);
   sema_down(&thread_current()->exit_sema);
   list_remove(&thread_current()->child_elem);
@@ -164,10 +163,11 @@ void exit (int status) {
 }
 
 pid_t exec (const char *file) {
+  valid_pointer(file);
   process_execute(file);
   if(thread_current()->success)
     return thread_current()->new_proc->pid;
-  return -1;
+  return PID_ERROR;
 }
 
 int wait (pid_t pid) {
@@ -181,10 +181,12 @@ bool create (const char *file, unsigned initial_size){
 }
 
 bool remove (const char *file){
+  valid_pointer(file);
 	return 0;
 }
 
 int open (const char *file){
+  valid_pointer(file);
 	return -1;
 }
 
@@ -197,6 +199,7 @@ int filesize (int fd){
 }
 
 int read (int fd, void *buffer, unsigned size){
+  valid_pointer(buffer);
 	return -1;
 }
 

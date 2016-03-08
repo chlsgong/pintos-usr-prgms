@@ -70,7 +70,7 @@ start_process (void *file_name_)
   palloc_free_page (file_name);
   sema_up(&thread_current()->exec_sema);
   if (!success) {
-    thread_exit ();
+    exit(-1);
   }
 
   /* Start the user process by simulating a return from an
@@ -99,7 +99,6 @@ process_wait (tid_t child_tid)
   struct list_elem *e;
   struct thread *t;
   int exit_status;
-  //struct list_elem child_elem = 
 
   for (e = list_begin (&thread_current()->children); 
        e != list_end (&thread_current()->children);
@@ -118,7 +117,6 @@ process_wait (tid_t child_tid)
   }
   if(!valid)
     return -1;
-
 
   sema_down(&t->process_sema);
   sema_up(&t->exit_sema);

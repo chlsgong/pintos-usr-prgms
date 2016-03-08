@@ -90,6 +90,7 @@ struct thread
     tid_t tid;                          /* Thread identifier. */
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
+    char file_name[14];
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
@@ -115,6 +116,7 @@ struct thread
     int exit_status;
     struct semaphore process_sema;
     struct semaphore exec_sema;
+    struct semaphore exit_sema;
     struct thread* new_proc;
     int success;
     pid_t pid;

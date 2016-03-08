@@ -98,12 +98,15 @@ process_wait (tid_t child_tid)
   int valid = 0;
   struct list_elem *e;
   struct thread *t;
+  int exit_status;
+  //struct list_elem child_elem = 
 
   for (e = list_begin (&thread_current()->children); 
        e != list_end (&thread_current()->children);
        e = list_next (e)) 
   {
       t = list_entry (e, struct thread, child_elem);
+      exit_status = t->exit_status;
       //Check if thead is valid
       if(t->tid == child_tid) {
         if(t->wait_flag)
@@ -113,12 +116,14 @@ process_wait (tid_t child_tid)
         break;
       }  
   }
-  
   if(!valid)
     return -1;
 
+
   sema_down(&t->process_sema);
-  return t->exit_status;
+  sema_up(&t->exit_sema);
+  return exit_status;
+  // return -1;
   // while(1){}
 }
 
@@ -258,6 +263,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   strlcpy(file_cpy, file_name, strlen(file_name)+1);
   token = strtok_r (file_cpy, " ", &save_ptr);
   file = filesys_open (token);
+  strlcpy(thread_current()->file_name, token, strlen(token)+1);
+
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -516,7 +523,7 @@ setup_stack (void **esp, const char* file_name)
 
   *esp = my_esp;
 
-  hex_dump(*esp, *esp, PHYS_BASE - *esp, 1);
+  // hex_dump(*esp, *esp, PHYS_BASE - *esp, 1);
   return success;
 }
 

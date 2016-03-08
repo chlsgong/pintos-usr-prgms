@@ -49,7 +49,7 @@ syscall_handler (struct intr_frame *f)
   
   int syscall = *(int *)(f->esp);
   //f->esp += sizeof(int);
-  printf("syscall %d\n", syscall);
+  // printf("syscall %d\n", syscall);
   switch(syscall) {
   	case(SYS_HALT):
   		halt();
@@ -155,6 +155,11 @@ void halt () {
 
 void exit (int status) {
   thread_current()->exit_status = status;
+  printf("%s: exit(%d)\n", thread_current()->file_name, status);
+  // sema down and wait before exiting /////////////////
+  sema_up(&thread_current()->process_sema);
+  sema_down(&thread_current()->exit_sema);
+  list_remove(&thread_current()->child_elem);
 	thread_exit();
 }
 
@@ -166,7 +171,7 @@ pid_t exec (const char *file) {
 }
 
 int wait (pid_t pid) {
-	return process_wait(pid);
+	return process_wait((tid_t) pid);
 }
 
 bool create (const char *file, unsigned initial_size){

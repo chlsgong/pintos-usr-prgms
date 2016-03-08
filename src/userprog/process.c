@@ -42,7 +42,8 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  // strlcpy(name, file_name, strlen(file_name)+1);
+  sema_down(&thread_current()->new_proc->exec_sema);
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -63,11 +64,14 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+  thread_current()->parent_process->success = success;
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
+  sema_up(&thread_current()->exec_sema);
+  if (!success) {
     thread_exit ();
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -89,31 +93,33 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  // int valid = 0;
-  // struct list_elem *e;
+  int valid = 0;
+  struct list_elem *e;
+  struct thread *t;
 
-  // for (e = list_begin (&all_list); 
-  //      e != list_end (&all_list);
-  //      e = list_next (e))
-  //   {
-  //     struct thread *t = list_entry (e, struct thread, allelem);
-  //     //Check if thead is valid
-  //     if(t->tid == child_tid) {
-  //       valid = 1;
-  //       break;
-  //     }
-  //   }
-  //   //Checking if thread is child
-  //   if()
+  for (e = list_begin (&thread_current()->children); 
+       e != list_end (&thread_current()->children);
+       e = list_next (e)) 
+  {
+      t = list_entry (e, struct thread, child_elem);
+      //Check if thead is valid
+      if(t->tid == child_tid) {
+        if(t->wait_flag)
+          return -1;
+        t->wait_flag = 1;
+        valid = 1;
+        break;
+      }  
+  }
   
-  // if(!valid)
-  //   return -1;
-  while(1)
-  {}
-  return -1;
+  if(!valid)
+    return -1;
 
+  sema_down(&t->process_sema);
+  return t->exit_status;
+  // while(1){}
 }
 
 /* Free the current process's resources. */

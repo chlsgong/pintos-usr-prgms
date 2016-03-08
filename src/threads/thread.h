@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/synch.h"
+#include "userprog/syscall.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -108,7 +109,16 @@ struct thread
     int donate;                         /*If set, do multilevel donation*/
     struct thread *parent_process;      /*The parent process that created this thread.*/ 
     struct list children;               /*List of child processes*/
-    struct list_elem child_elem;   /*Places into parent's children list*/
+    struct list_elem child_elem;        /*Places into parent's children list*/
+    int wait_flag;
+    int excep_flag;
+    int exit_status;
+    struct semaphore process_sema;
+    struct semaphore exec_sema;
+    struct thread* new_proc;
+    int success;
+    pid_t pid;
+
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

@@ -189,3 +189,8 @@ putchar_have_lock (uint8_t c)
   serial_putc (c);
   vga_putc (c);
 }
+
+/* Returns the number of characters written to console */
+long long written_chars() {
+  return write_cnt;
+} 

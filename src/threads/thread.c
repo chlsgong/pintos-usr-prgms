@@ -183,7 +183,7 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
-
+  t->pid = tid;
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -203,6 +203,9 @@ thread_create (const char *name, int priority,
   // Setting parent_process
   t->parent_process = thread_current();
   list_push_back(&thread_current()->children, &t->child_elem);
+
+  // Add child thread to current thread
+  thread_current()->new_proc = t;
 
   /* Add to run queue. */
   //If new thread's priority is higher than current thread...
@@ -508,8 +511,14 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->plist);
   t->donate = 0;
   t->lockCount = 0;
+  list_init(&t->children);
+  t->wait_flag = 0;
+  t->exit_status = -1; // success
+  t->success = 0;
 
   sema_init(&t->sema, 0);
+  sema_init(&t->process_sema, 0);
+  sema_init(&t->exec_sema, 0);
 
   old_level = intr_disable();
   list_insert_ordered(&all_list, &t->allelem, 

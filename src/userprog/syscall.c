@@ -154,11 +154,12 @@ void halt () {
 }
 
 void exit (int status) {
-  thread_current()->exit_status = status;
+  struct zombie* z = &thread_current()->this_zombie;
+  z->exit_status = status;
   printf("%s: exit(%d)\n", thread_current()->file_name, status);
-  sema_up(&thread_current()->process_sema);
-  sema_down(&thread_current()->exit_sema);
-  list_remove(&thread_current()->child_elem);
+  sema_up(&z->process_sema);
+  // sema_down(&thread_current()->exit_sema);
+  list_remove(&thread_current()->this_zombie.z_elem);
 	thread_exit();
 }
 

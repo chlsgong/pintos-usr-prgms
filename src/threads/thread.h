@@ -78,6 +78,15 @@ typedef int tid_t;
    value, triggering the assertion.  (So don't add elements below 
    THREAD_MAGIC.)
 */
+
+struct zombie {
+  struct semaphore process_sema;
+  tid_t tid;
+  int exit_status;
+  int wait_flag;
+  struct list_elem z_elem;
+};
+
 /* The `elem' member has a dual purpose.  It can be an element in
    the run queue (thread.c), or it can be an element in a
    semaphore wait list (synch.c).  It can be used these two ways
@@ -109,17 +118,20 @@ struct thread
     int old_priority;                   /*Original thread's priority*/
     int donate;                         /*If set, do multilevel donation*/
     struct thread *parent_process;      /*The parent process that created this thread.*/ 
-    struct list children;               /*List of child processes*/
-    struct list_elem child_elem;        /*Places into parent's children list*/
-    int wait_flag;
+    // struct list children;               /*List of child processes*/
+    // struct list_elem child_elem;        /*Places into parent's children list*/
+    // int wait_flag;
     int excep_flag;
-    int exit_status;
-    struct semaphore process_sema;
+    // int exit_status;
+    // struct semaphore process_sema;
     struct semaphore exec_sema;
-    struct semaphore exit_sema;
+    // struct semaphore exit_sema;
     struct thread* new_proc;
     int success;
     pid_t pid;
+
+    struct list zombies;
+    struct zombie this_zombie;
 
 
 #ifdef USERPROG
@@ -135,6 +147,8 @@ struct thread
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
+
+void zombie_init(struct zombie*);
 
 void thread_init (void);
 void thread_start (void);

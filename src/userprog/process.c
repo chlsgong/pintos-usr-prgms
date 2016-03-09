@@ -97,31 +97,53 @@ process_wait (tid_t child_tid)
 {
   int valid = 0;
   struct list_elem *e;
-  struct thread *t;
-  int exit_status;
+  struct zombie *z;
 
-  for (e = list_begin (&thread_current()->children); 
-       e != list_end (&thread_current()->children);
+  for (e = list_begin (&thread_current()->zombies); 
+       e != list_end (&thread_current()->zombies);
        e = list_next (e)) 
   {
-      t = list_entry (e, struct thread, child_elem);
-      exit_status = t->exit_status;
-      //Check if thead is valid
-      if(t->tid == child_tid) {
-        if(t->wait_flag)
+      z = list_entry (e, struct zombie, z_elem);
+      //Check if thread is valid
+      if(z->tid == child_tid) {
+        if(z->wait_flag) {
           return -1;
-        t->wait_flag = 1;
+        }
+        z->wait_flag = 1;
         valid = 1;
         break;
       }  
   }
   if(!valid)
     return -1;
+  sema_down(&z->process_sema); // block
+  return z->exit_status;
 
-  sema_down(&t->process_sema);
-  sema_up(&t->exit_sema);
-  return exit_status;
-  // return -1;
+
+
+
+
+  // for (e = list_begin (&thread_current()->children); 
+  //      e != list_end (&thread_current()->children);
+  //      e = list_next (e)) 
+  // {
+  //     t = list_entry (e, struct thread, child_elem);
+  //     exit_status = t->exit_status;
+  //     //Check if thread is valid
+  //     if(t->tid == child_tid) {
+  //       if(t->wait_flag)
+  //         return -1;
+  //       t->wait_flag = 1;
+  //       valid = 1;
+  //       break;
+  //     }  
+  // }
+  // if(!valid)
+  //   return -1;
+
+  // sema_down(&t->process_sema); // block
+  // sema_up(&t->exit_sema);
+  // return exit_status;
   // while(1){}
 }
 

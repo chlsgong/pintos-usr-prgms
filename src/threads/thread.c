@@ -70,7 +70,14 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+struct thread *thread_current (void); 
 
+
+void zombie_init(struct zombie* z) {
+  sema_init(&z->process_sema, 0);
+  z->exit_status = -1;
+  z->wait_flag = 0;
+}
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -184,6 +191,8 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
   t->pid = tid;
+  zombie_init(&t->this_zombie);
+  t->this_zombie.tid = tid;
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -202,7 +211,9 @@ thread_create (const char *name, int priority,
   
   // Setting parent_process
   t->parent_process = thread_current();
-  list_push_back(&thread_current()->children, &t->child_elem);
+  // list_push_back(&thread_current()->children, &t->child_elem);
+
+  list_push_back(&thread_current()->zombies, &t->this_zombie.z_elem); 
 
   // Add child thread to current thread
   thread_current()->new_proc = t;
@@ -495,7 +506,7 @@ static void
 init_thread (struct thread *t, const char *name, int priority)
 {
   enum intr_level old_level;
-  
+
   ASSERT (t != NULL);
   ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
   ASSERT (name != NULL);
@@ -511,15 +522,16 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->plist);
   t->donate = 0;
   t->lockCount = 0;
-  list_init(&t->children);
-  t->wait_flag = 0;
-  t->exit_status = -1; // success
+  // list_init(&t->children);
+  // t->wait_flag = 0;
+  // t->exit_status = -1; // success
   t->success = 0;
+  list_init(&t->zombies);
 
   sema_init(&t->sema, 0);
-  sema_init(&t->process_sema, 0);
+  //sema_init(&t->process_sema, 0);
   sema_init(&t->exec_sema, 0);
-  sema_init(&t->exit_sema, 0);
+  // sema_init(&t->exit_sema, 0);
 
   old_level = intr_disable();
   list_insert_ordered(&all_list, &t->allelem, 

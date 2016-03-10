@@ -80,10 +80,8 @@ typedef int tid_t;
 */
 
 struct zombie {
-  struct semaphore process_sema;
   tid_t tid;
   int exit_status;
-  int wait_flag;
   struct list_elem z_elem;
 };
 
@@ -97,6 +95,7 @@ struct thread
   {
     /* Owned by thread.c. */
     tid_t tid;                          /* Thread identifier. */
+    pid_t pid;                          /* Process identifier. */
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     char file_name[14];
@@ -117,22 +116,18 @@ struct thread
     int lockCount;                      /*How many locks are*/
     int old_priority;                   /*Original thread's priority*/
     int donate;                         /*If set, do multilevel donation*/
-    struct thread *parent_process;      /*The parent process that created this thread.*/ 
-    // struct list children;               /*List of child processes*/
-    // struct list_elem child_elem;        /*Places into parent's children list*/
-    // int wait_flag;
-    int excep_flag;
-    // int exit_status;
-    // struct semaphore process_sema;
-    struct semaphore exec_sema;
-    // struct semaphore exit_sema;
-    struct thread* new_proc;
+    struct thread* new_proc;            /*The new process that was created*/
     int success;
-    pid_t pid;
+    int child_pid;
+    struct list children;               /*Alive children*/
+    struct list zombies;                /*Dead children*/
 
-    struct list zombies;
-    struct zombie this_zombie;
-
+    /* For child threads */
+    struct thread *parent_process;      /*The parent process that created this thread.*/
+    struct semaphore exec_sema;         /*Wait for child to successfully load new program.*/
+    struct semaphore process_sema;      /*Block waiting thread until child exits.*/
+    struct list_elem child_elem;        /*List element for children list.*/
+    int wait_flag;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -147,8 +142,6 @@ struct thread
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
-
-void zombie_init(struct zombie*);
 
 void thread_init (void);
 void thread_start (void);

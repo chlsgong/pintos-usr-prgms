@@ -8,6 +8,7 @@
 #include "devices/shutdown.h"
 #include "threads/synch.h"
 #include "kernel/console.h"
+#include "threads/palloc.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -65,41 +66,41 @@ syscall_handler (struct intr_frame *f)
   		/*Read from stack to get file pointer, check if valid*/
       valid_pointer(f->esp + 4);
   		file = *(char **)(f->esp + 4);
-  		exec(file);
+  		f->eax = exec(file);
   		break;
   	case(SYS_WAIT):
   		/*Read from stack once*/
   		pid = *(int *)(f->esp + 4);
-  		wait(pid);
+  		f->eax = wait(pid);
   		break;
   	case(SYS_CREATE):
-      printf("\nAYYYYYYYYEEEEE: CREATE\n");
+      // printf("\nAYYYYYYYYEEEEE: CREATE\n");
   		/*Read from stack twice, check if file is valid*/
   		file = f->esp + 4;
   		initial_size = *(unsigned *)(f->esp + 8);
   		create(file, initial_size);
   		break;
   	case(SYS_REMOVE):
-      printf("\nAYYYYYYYYEEEEE: REMOVE\n");
+      // printf("\nAYYYYYYYYEEEEE: REMOVE\n");
   		/*Read from stack once, check if file is valid*/
   		file = f->esp + 4;
   		remove(file);
   		break;
   	case(SYS_OPEN):
-      printf("\nAYYYYYYYYEEEEE: OPEN\n");
+      // printf("\nAYYYYYYYYEEEEE: OPEN\n");
   		/*Read from stack once, check if file is valid*/
   		file = f->esp + 4;
   		open(file);
   		break;
   	case(SYS_FILESIZE):
-      printf("\nAYYYYYYYYEEEEE: FILESIZE\n");
+      // printf("\nAYYYYYYYYEEEEE: FILESIZE\n");
   		/*Read from stack once*/
   		fd = *(int *)(f->esp + 4);
   		filesize(fd);
   		break;
   	case(SYS_READ):
   		/*Read from stack 3 times, check if buffer is valid*/
-      printf("\nAYYYYYYYYEEEEE: READ\n");
+      // printf("\nAYYYYYYYYEEEEE: READ\n");
   		fd = *(int *)(f->esp + 4);
   		read_buffer = f->esp + 8;
   		size = *(unsigned *)(f->esp + 12);
@@ -114,19 +115,19 @@ syscall_handler (struct intr_frame *f)
   		break;
   	case(SYS_SEEK):
   		/*Read from stack twice*/
-      printf("\nAYYYYYYYYEEEEE: SEEK\n");
+      // printf("\nAYYYYYYYYEEEEE: SEEK\n");
   		fd = *(int *)(f->esp + 4);
   		position = *(unsigned *)(f->esp + 8);
   		seek(fd, position);
   		break;
   	case(SYS_TELL):
   		/*Read from stack once*/
-      printf("\nAYYYYYYYYEEEEE: TELL\n");
+      // printf("\nAYYYYYYYYEEEEE: TELL\n");
   		fd = *(int *)(f->esp + 4);
   		tell(fd);
   		break;
   	case(SYS_CLOSE):
-      printf("AYYYYYYYYEEEEE: CLOSE\n");
+      // printf("AYYYYYYYYEEEEE: CLOSE\n");
   		/*Read from stack once*/
   		fd = *(int *)(f->esp + 4);
   		close(fd);
@@ -148,26 +149,42 @@ int valid_pointer(const void *pointer) {
 	return 1;
 }
 
-
 void halt () {
 	shutdown_power_off();
 }
 
 void exit (int status) {
-  struct zombie* z = &thread_current()->this_zombie;
+  struct zombie* z = palloc_get_page(PAL_ZERO); // allocate
+  struct list_elem* e;
+  struct zombie* reaped;
+
   z->exit_status = status;
-  printf("%s: exit(%d)\n", thread_current()->file_name, status);
-  sema_up(&z->process_sema);
-  // sema_down(&thread_current()->exit_sema);
-  list_remove(&thread_current()->this_zombie.z_elem);
-	thread_exit();
+  z->tid = thread_current()->tid;
+  list_push_back(&thread_current()->parent_process->zombies, &z->z_elem); // add to parent's zombie list
+  list_remove(&thread_current()->child_elem); // remove from parent's children list
+
+  // deallocate all its children
+  // if(!list_empty(&thread_current()->zombies)) {
+  //   for (e = list_begin (&thread_current()->zombies); 
+  //      e != list_end (&thread_current()->zombies);
+  //      e = list_next (e)) 
+  //     {
+  //       reaped = list_entry(e, struct zombie, z_elem);
+  //       palloc_free_page(reaped);
+  //     }
+  // }
+
+  printf("%s: exit(%d)\n", thread_current()->file_name, status);  
+  sema_up(&thread_current()->process_sema);
+  thread_exit();
 }
 
 pid_t exec (const char *file) {
   valid_pointer(file);
   process_execute(file);
-  if(thread_current()->success)
-    return thread_current()->new_proc->pid;
+  if(thread_current()->success) {
+    return thread_current()->child_pid;
+  }
   return PID_ERROR;
 }
 

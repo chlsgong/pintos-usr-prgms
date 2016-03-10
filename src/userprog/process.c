@@ -17,7 +17,6 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-// #include "lib/user/syscall.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -65,6 +64,7 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
   thread_current()->parent_process->success = success;
+  thread_current()->parent_process->child_pid = thread_current()->pid;
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -95,56 +95,52 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
-  int valid = 0;
   struct list_elem *e;
+  struct thread* child;
   struct zombie *z;
+  // int old;
 
+  // old = intr_disable();
+  // check if inside children list
+  for (e = list_begin (&thread_current()->children); 
+       e != list_end (&thread_current()->children);
+       e = list_next (e)) 
+  {
+      child = list_entry (e, struct thread, child_elem);
+      // printf("CHILD TID, 1: %d\n", child->tid);
+
+      //Check if thread is valid
+      if(child->tid == child_tid) {
+        // issue here
+        if(child->wait_flag) {
+          return -1;
+        }
+        child->wait_flag = 1;
+        // valid = 1;
+        // printf("CHILD TID, 2: %d\n", child->tid);
+        sema_down(&child->process_sema); // block
+        break;
+      }
+  }
+  // intr_set_level(old);
+  // check if inside zombie list
   for (e = list_begin (&thread_current()->zombies); 
        e != list_end (&thread_current()->zombies);
        e = list_next (e)) 
   {
-      z = list_entry (e, struct zombie, z_elem);
-      //Check if thread is valid
-      if(z->tid == child_tid) {
-        if(z->wait_flag) {
-          return -1;
-        }
-        z->wait_flag = 1;
-        valid = 1;
-        break;
-      }  
+    z = list_entry (e, struct zombie, z_elem);
+    if(z->tid == child_tid) {
+      // printf("TID, 3: %d\n", z->tid);
+      // printf("STATUS: %d\n", z->exit_status);
+      list_remove(&z->z_elem);
+      palloc_free_page(z);
+      return z->exit_status;
+    }
   }
-  if(!valid)
-    return -1;
-  sema_down(&z->process_sema); // block
-  return z->exit_status;
-
-
-
-
-
-  // for (e = list_begin (&thread_current()->children); 
-  //      e != list_end (&thread_current()->children);
-  //      e = list_next (e)) 
-  // {
-  //     t = list_entry (e, struct thread, child_elem);
-  //     exit_status = t->exit_status;
-  //     //Check if thread is valid
-  //     if(t->tid == child_tid) {
-  //       if(t->wait_flag)
-  //         return -1;
-  //       t->wait_flag = 1;
-  //       valid = 1;
-  //       break;
-  //     }  
-  // }
-  // if(!valid)
-  //   return -1;
-
-  // sema_down(&t->process_sema); // block
-  // sema_up(&t->exit_sema);
-  // return exit_status;
-  // while(1){}
+  // printf("Returning -1!\n");
+  return -1; // returning here
+  // printf("exit_status: %d\n", z->exit_status);
+  // search in dead children list, get info, then deallocate
 }
 
 /* Free the current process's resources. */

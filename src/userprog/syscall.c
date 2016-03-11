@@ -25,10 +25,10 @@ int write (int fd, const void *buffer, unsigned length);
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
-int valid_pointer(const void *pointer);
+void valid_pointer(const void *pointer);
 
 // Lock variable
-struct lock file_lock;
+static struct lock file_lock;
 
 void syscall_init (void) {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
@@ -70,15 +70,17 @@ syscall_handler (struct intr_frame *f)
   		break;
   	case(SYS_WAIT):
   		/*Read from stack once*/
+      valid_pointer(f->esp + 4);
   		pid = *(int *)(f->esp + 4);
   		f->eax = wait(pid);
   		break;
   	case(SYS_CREATE):
-      // printf("\nAYYYYYYYYEEEEE: CREATE\n");
   		/*Read from stack twice, check if file is valid*/
-  		file = f->esp + 4;
+      valid_pointer(f->esp + 4);
+  		file = *(char **)(f->esp + 4);
+      valid_pointer(f->esp + 8);
   		initial_size = *(unsigned *)(f->esp + 8);
-  		create(file, initial_size);
+  		f->eax = create(file, initial_size);
   		break;
   	case(SYS_REMOVE):
       // printf("\nAYYYYYYYYEEEEE: REMOVE\n");
@@ -87,10 +89,10 @@ syscall_handler (struct intr_frame *f)
   		remove(file);
   		break;
   	case(SYS_OPEN):
-      // printf("\nAYYYYYYYYEEEEE: OPEN\n");
   		/*Read from stack once, check if file is valid*/
-  		file = f->esp + 4;
-  		open(file);
+      valid_pointer(f->esp + 4);
+      file = *(char **)(f->esp + 4);;
+  		f->eax = open(file);
   		break;
   	case(SYS_FILESIZE):
       // printf("\nAYYYYYYYYEEEEE: FILESIZE\n");
@@ -108,10 +110,13 @@ syscall_handler (struct intr_frame *f)
   		break;
   	case(SYS_WRITE):
   		/*Read from stack 3 times, check if buffer is valid*/
+      valid_pointer(f->esp + 4);
   		fd = *(int *)(f->esp + 4);
+      valid_pointer(f->esp + 8);
   		write_buffer = *(char**)(f->esp + 8);
+      valid_pointer(f->esp + 12);
   		size = *(unsigned *)(f->esp + 12);
-  		write(fd, write_buffer, size);
+  		f->eax = write(fd, write_buffer, size);
   		break;
   	case(SYS_SEEK):
   		/*Read from stack twice*/
@@ -139,14 +144,12 @@ syscall_handler (struct intr_frame *f)
 }
 
 
-int valid_pointer(const void *pointer) {
+void valid_pointer(const void *pointer) {
 	struct thread *cur_thread = thread_current();
 	if(pointer == NULL || is_kernel_vaddr(pointer) ||
 	  pagedir_get_page (cur_thread->pagedir, pointer) == NULL) {
-		exit(-1);
-		return 0;
-	}
-	return 1;
+  		exit(-1);
+    }
 }
 
 void halt () {
@@ -157,22 +160,31 @@ void exit (int status) {
   struct zombie* z = palloc_get_page(PAL_ZERO); // allocate
   struct list_elem* e;
   struct zombie* reaped;
+  struct thread* c;
 
   z->exit_status = status;
   z->tid = thread_current()->tid;
   list_push_back(&thread_current()->parent_process->zombies, &z->z_elem); // add to parent's zombie list
   list_remove(&thread_current()->child_elem); // remove from parent's children list
 
-  // deallocate all its children
-  // if(!list_empty(&thread_current()->zombies)) {
-  //   for (e = list_begin (&thread_current()->zombies); 
-  //      e != list_end (&thread_current()->zombies);
-  //      e = list_next (e)) 
-  //     {
-  //       reaped = list_entry(e, struct zombie, z_elem);
-  //       palloc_free_page(reaped);
-  //     }
-  // }
+  // set all children's parent to null
+  for (e = list_begin (&thread_current()->children); 
+   e != list_end (&thread_current()->children);
+   e = list_next (e)) 
+  {
+    c = list_entry(e, struct thread, child_elem);
+    c->parent_process = NULL;
+  }
+
+  // deallocate all its zombie children
+  if(!list_empty(&thread_current()->zombies)) {
+    e = list_begin (&thread_current()->zombies);
+    while(e != list_end (&thread_current()->zombies)) {
+      reaped = list_entry(e, struct zombie, z_elem);
+      e = list_next(e);
+      palloc_free_page(reaped);
+    }
+  } 
 
   printf("%s: exit(%d)\n", thread_current()->file_name, status);  
   sema_up(&thread_current()->process_sema);
@@ -193,9 +205,8 @@ int wait (pid_t pid) {
 }
 
 bool create (const char *file, unsigned initial_size){
-  if (valid_pointer(file)) {
-    return filesys_create(file, initial_size);
-  }
+  valid_pointer(file);
+  return filesys_create(file, initial_size);
 }
 
 bool remove (const char *file){
@@ -204,8 +215,25 @@ bool remove (const char *file){
 }
 
 int open (const char *file){
+  struct file* f;
+  struct open_file* of;
+
   valid_pointer(file);
-	return -1;
+  lock_acquire(&file_lock);
+
+  f = filesys_open(file);
+  if(f == NULL)
+    return -1;
+
+  of = palloc_get_page(PAL_ZERO);
+  of->f = f;
+  of->fd = thread_current()->fd_cnt;
+
+  thread_current()->fd_cnt++;
+  list_push_back(&thread_current()->open_files, &of->file_elem);
+  
+  lock_release(&file_lock);
+	return of->fd;
 }
 
 int filesize (int fd){
@@ -223,17 +251,28 @@ int read (int fd, void *buffer, unsigned size){
 
 int write (int fd, const void *buffer, unsigned size) {
   // may have to break up buffer if too long////////
-  // lock_acquire(&file_lock);
   int num_bytes = -1;
-  if (fd == 1) {
-   valid_pointer(buffer);
-   putbuf(buffer, (int) size);
-   num_bytes = written_chars();
+
+  valid_pointer(buffer);
+  lock_acquire(&file_lock);
+
+  if(!fd)
+    exit(-1);
+  if(fd == 1) {
+    while(size > 128) {
+      size -= 128;
+      if(strlen((char*) buffer) <= 128)
+        break;
+      putbuf(buffer, 128);
+      buffer += 128;
+    }
+    putbuf(buffer, (int) size);
+    num_bytes = written_chars();
   }
-  else{
+  else {
     // file_write()
   }
-  // lock_release(&file_lock);
+  lock_release(&file_lock);
 	return num_bytes;
 }
 
@@ -245,5 +284,4 @@ unsigned tell (int fd){
 
 void close (int fd){
 }
-
 

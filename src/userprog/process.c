@@ -98,31 +98,29 @@ process_wait (tid_t child_tid)
   struct list_elem *e;
   struct thread* child;
   struct zombie *z;
-  // int old;
+  int old;
+  int status;
 
-  // old = intr_disable();
+  old = intr_disable();
   // check if inside children list
   for (e = list_begin (&thread_current()->children); 
        e != list_end (&thread_current()->children);
        e = list_next (e)) 
   {
       child = list_entry (e, struct thread, child_elem);
-      // printf("CHILD TID, 1: %d\n", child->tid);
-
       //Check if thread is valid
       if(child->tid == child_tid) {
-        // issue here
         if(child->wait_flag) {
           return -1;
         }
         child->wait_flag = 1;
-        // valid = 1;
-        // printf("CHILD TID, 2: %d\n", child->tid);
+
+        intr_set_level(old);
         sema_down(&child->process_sema); // block
         break;
       }
   }
-  // intr_set_level(old);
+  intr_set_level(old);
   // check if inside zombie list
   for (e = list_begin (&thread_current()->zombies); 
        e != list_end (&thread_current()->zombies);
@@ -130,17 +128,13 @@ process_wait (tid_t child_tid)
   {
     z = list_entry (e, struct zombie, z_elem);
     if(z->tid == child_tid) {
-      // printf("TID, 3: %d\n", z->tid);
-      // printf("STATUS: %d\n", z->exit_status);
+      status = z->exit_status;
       list_remove(&z->z_elem);
       palloc_free_page(z);
-      return z->exit_status;
+      return status;
     }
   }
-  // printf("Returning -1!\n");
-  return -1; // returning here
-  // printf("exit_status: %d\n", z->exit_status);
-  // search in dead children list, get info, then deallocate
+  return -1; // invalid wait call
 }
 
 /* Free the current process's resources. */

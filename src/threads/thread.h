@@ -85,6 +85,12 @@ struct zombie {
   struct list_elem z_elem;
 };
 
+struct open_file {
+  struct file* f;
+  int fd;
+  struct list_elem file_elem;
+};
+
 /* The `elem' member has a dual purpose.  It can be an element in
    the run queue (thread.c), or it can be an element in a
    semaphore wait list (synch.c).  It can be used these two ways
@@ -121,6 +127,8 @@ struct thread
     int child_pid;
     struct list children;               /*Alive children*/
     struct list zombies;                /*Dead children*/
+    int fd_cnt;
+    struct list open_files;
 
     /* For child threads */
     struct thread *parent_process;      /*The parent process that created this thread.*/

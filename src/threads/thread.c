@@ -518,6 +518,8 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->zombies);
   t->wait_flag = 0;
   t->child_pid = 0;
+  t->fd_cnt = 2;
+  list_init(&t->open_files);
 
   sema_init(&t->sema, 0);
   sema_init(&t->exec_sema, 0);

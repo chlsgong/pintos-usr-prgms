@@ -9,6 +9,10 @@
 #include "threads/synch.h"
 #include "kernel/console.h"
 #include "threads/palloc.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
+#include "lib/string.h"
+#include "userprog/process.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -26,6 +30,7 @@ void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
 void valid_pointer(const void *pointer);
+bool is_valid(const void *pointer);
 
 // Lock variable
 static struct lock file_lock;
@@ -143,13 +148,20 @@ syscall_handler (struct intr_frame *f)
   }
 }
 
+bool is_valid(const void *pointer) {
+  struct thread *cur_thread = thread_current();
+  if(pointer == NULL || is_kernel_vaddr(pointer) ||
+    pagedir_get_page (cur_thread->pagedir, pointer) == NULL) {
+    return 0;
+  }
+  return 1;
+}
+
 
 void valid_pointer(const void *pointer) {
-	struct thread *cur_thread = thread_current();
-	if(pointer == NULL || is_kernel_vaddr(pointer) ||
-	  pagedir_get_page (cur_thread->pagedir, pointer) == NULL) {
-  		exit(-1);
-    }
+  if (!is_valid(pointer)) {
+    exit(-1);
+  }
 }
 
 void halt () {
@@ -210,7 +222,12 @@ bool create (const char *file, unsigned initial_size){
 }
 
 bool remove (const char *file){
-  valid_pointer(file);
+  lock_acquire(&file_lock);
+
+  if (!is_valid(file)) {
+    lock_release(&file_lock);
+    exit(-1);
+  } 
 	return 0;
 }
 
@@ -218,12 +235,17 @@ int open (const char *file){
   struct file* f;
   struct open_file* of;
 
-  valid_pointer(file);
   lock_acquire(&file_lock);
+  if (!is_valid(file)) {
+    lock_release(&file_lock);
+    exit(-1);
+  } 
 
   f = filesys_open(file);
-  if(f == NULL)
+  if(f == NULL) {
+    lock_release(&file_lock);
     return -1;
+  }
 
   of = palloc_get_page(PAL_ZERO);
   of->f = f;
@@ -250,11 +272,16 @@ int read (int fd, void *buffer, unsigned size){
 }
 
 int write (int fd, const void *buffer, unsigned size) {
-  // may have to break up buffer if too long////////
-  int num_bytes = -1;
+  // may have to break up buffer if too long
+  int num_bytes = 0;
+  struct list_elem *e;
+  struct open_file *of;
 
-  valid_pointer(buffer);
   lock_acquire(&file_lock);
+  if (!is_valid(buffer)) {
+    lock_release(&file_lock);
+    exit(-1);
+  } 
 
   if(!fd)
     exit(-1);
@@ -270,7 +297,19 @@ int write (int fd, const void *buffer, unsigned size) {
     num_bytes = written_chars();
   }
   else {
-    // file_write()
+    for (e = list_begin (&thread_current()->open_files); 
+    e != list_end (&thread_current()->open_files);
+    e = list_next (e)) 
+    {
+      of = list_entry(e, struct open_file, file_elem);
+      //printf("of file descriptor: %d\n", of->fd);
+      if(of->fd == fd) {
+	if(!(of->f->deny_write))
+	  num_bytes = file_write(of->f, buffer, size); 
+	  //printf("num_bytes: %d\n", num_bytes);
+        break;
+      }
+    }
   }
   lock_release(&file_lock);
 	return num_bytes;

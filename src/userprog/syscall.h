@@ -8,9 +8,7 @@ typedef int pid_t;
 #define EXIT_SUCCESS 0          /* Successful execution. */
 #define EXIT_FAILURE 1          /* Unsuccessful execution. */
 
-
-
-
+struct file;
 void syscall_init (void);
 
 #endif /* userprog/syscall.h */

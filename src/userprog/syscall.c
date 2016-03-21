@@ -13,6 +13,7 @@
 #include "filesys/file.h"
 #include "lib/string.h"
 #include "userprog/process.h"
+#include "devices/input.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -88,10 +89,10 @@ syscall_handler (struct intr_frame *f)
   		f->eax = create(file, initial_size);
   		break;
   	case(SYS_REMOVE):
-      // printf("\nAYYYYYYYYEEEEE: REMOVE\n");
   		/*Read from stack once, check if file is valid*/
-  		file = f->esp + 4;
-  		remove(file);
+      valid_pointer(f->esp + 4);
+  		file = *(char **)(f->esp + 4);
+  		f->eax = remove(file);
   		break;
   	case(SYS_OPEN):
   		/*Read from stack once, check if file is valid*/
@@ -100,18 +101,20 @@ syscall_handler (struct intr_frame *f)
   		f->eax = open(file);
   		break;
   	case(SYS_FILESIZE):
-      // printf("\nAYYYYYYYYEEEEE: FILESIZE\n");
   		/*Read from stack once*/
+      valid_pointer(f->esp + 4);
   		fd = *(int *)(f->esp + 4);
-  		filesize(fd);
+  		f->eax = filesize(fd);
   		break;
   	case(SYS_READ):
   		/*Read from stack 3 times, check if buffer is valid*/
-      // printf("\nAYYYYYYYYEEEEE: READ\n");
+      valid_pointer(f->esp + 4);
   		fd = *(int *)(f->esp + 4);
-  		read_buffer = f->esp + 8;
+      valid_pointer(f->esp + 8);
+  		read_buffer = *(char**)(f->esp + 8);
+      valid_pointer(f->esp + 12);
   		size = *(unsigned *)(f->esp + 12);
-  		read(fd, read_buffer, size);
+  		f->eax = read(fd, read_buffer, size);
   		break;
   	case(SYS_WRITE):
   		/*Read from stack 3 times, check if buffer is valid*/
@@ -125,20 +128,21 @@ syscall_handler (struct intr_frame *f)
   		break;
   	case(SYS_SEEK):
   		/*Read from stack twice*/
-      // printf("\nAYYYYYYYYEEEEE: SEEK\n");
+      valid_pointer(f->esp + 4);
   		fd = *(int *)(f->esp + 4);
+      valid_pointer(f->esp + 8);
   		position = *(unsigned *)(f->esp + 8);
   		seek(fd, position);
   		break;
   	case(SYS_TELL):
   		/*Read from stack once*/
-      // printf("\nAYYYYYYYYEEEEE: TELL\n");
+      valid_pointer(f->esp + 4);
   		fd = *(int *)(f->esp + 4);
-  		tell(fd);
+  		f->eax = tell(fd);
   		break;
   	case(SYS_CLOSE):
-      // printf("AYYYYYYYYEEEEE: CLOSE\n");
   		/*Read from stack once*/
+      valid_pointer(f->esp + 4);
   		fd = *(int *)(f->esp + 4);
   		close(fd);
   		break;
@@ -173,6 +177,7 @@ void exit (int status) {
   struct list_elem* e;
   struct zombie* reaped;
   struct thread* c;
+  struct open_file *of;
 
   z->exit_status = status;
   z->tid = thread_current()->tid;
@@ -200,6 +205,16 @@ void exit (int status) {
 
   printf("%s: exit(%d)\n", thread_current()->file_name, status);  
   sema_up(&thread_current()->process_sema);
+    // Closing and removing all open files
+  for (e = list_begin (&thread_current()->open_files);
+  e != list_end (&thread_current()->open_files);
+  e = list_next (e))
+  {
+      of = list_entry(e, struct open_file, file_elem);
+      file_close(of->f);
+      list_remove(e);
+  }
+
   thread_exit();
 }
 
@@ -217,58 +232,117 @@ int wait (pid_t pid) {
 }
 
 bool create (const char *file, unsigned initial_size){
-  valid_pointer(file);
-  return filesys_create(file, initial_size);
+  lock_acquire(&file_lock);
+  if (!is_valid(file)) {
+    lock_release(&file_lock);
+    exit(-1);
+  }
+  bool success = filesys_create(file, initial_size);
+  lock_release(&file_lock);
+  return success;
 }
 
 bool remove (const char *file){
   lock_acquire(&file_lock);
-
   if (!is_valid(file)) {
     lock_release(&file_lock);
     exit(-1);
   } 
-	return 0;
+  bool success = filesys_remove(file);
+  lock_release(&file_lock);
+	return success;
 }
 
 int open (const char *file){
   struct file* f;
   struct open_file* of;
+  char *token, *save_ptr;
+  char file_cpy[strlen(file)+1];
+  int cnt = 0;  
 
   lock_acquire(&file_lock);
   if (!is_valid(file)) {
     lock_release(&file_lock);
     exit(-1);
-  } 
-
+  }
   f = filesys_open(file);
+
   if(f == NULL) {
     lock_release(&file_lock);
     return -1;
   }
 
+  strlcpy(file_cpy, file, strlen(file)+1);
+  for (token = strtok_r (file_cpy, ".", &save_ptr); token != NULL; 
+    token = strtok_r (NULL, ".", &save_ptr)) {
+    cnt++;
+  }
+  if(cnt == 1)
+    file_deny_write(f);
+  
   of = palloc_get_page(PAL_ZERO);
   of->f = f;
   of->fd = thread_current()->fd_cnt;
 
   thread_current()->fd_cnt++;
   list_push_back(&thread_current()->open_files, &of->file_elem);
-  
   lock_release(&file_lock);
 	return of->fd;
 }
 
 int filesize (int fd){
-  // need to access file from thread_current() file table
-  /*const char *file = thread_current() -> file_table[fd]
-    int size = file_length(file);
-	  return size; */
-    return -1;
+  lock_acquire(&file_lock);
+  struct list_elem *e;
+  struct open_file *of;
+  int size = -1;
+  if(fd < 2) {
+    lock_release(&file_lock);
+    exit(-1);
+  }
+  for (e = list_begin (&thread_current()->open_files); 
+   e != list_end (&thread_current()->open_files);
+   e = list_next (e)) 
+  {
+    of = list_entry(e, struct open_file, file_elem);
+    if(fd == of->fd) {
+      size = file_length(of->f);
+      break;
+    }
+  }
+  lock_release(&file_lock);
+  return size;
 }
 
 int read (int fd, void *buffer, unsigned size){
-  valid_pointer(buffer);
-	return -1;
+  int num_bytes = -1;
+  struct list_elem* e;
+  struct open_file* of;
+
+  lock_acquire(&file_lock);
+  if(!is_valid(buffer) || fd == 1) {
+    lock_release(&file_lock);
+    exit(-1);
+  }
+  if(!fd) {
+    // read from keyboard
+    num_bytes = input_getc();
+    lock_release(&file_lock);
+    return num_bytes;
+  }
+  else {
+    for (e = list_begin (&thread_current()->open_files);
+     e != list_end (&thread_current()->open_files);
+     e = list_next (e))
+    {
+      of = list_entry(e, struct open_file, file_elem);       
+      if(of->fd == fd) {
+        num_bytes = file_read(of->f, buffer, size);
+        break;
+      }     
+    }
+  }
+  lock_release(&file_lock);
+  return num_bytes;
 }
 
 int write (int fd, const void *buffer, unsigned size) {
@@ -282,7 +356,6 @@ int write (int fd, const void *buffer, unsigned size) {
     lock_release(&file_lock);
     exit(-1);
   } 
-
   if(!fd)
     exit(-1);
   if(fd == 1) {
@@ -302,11 +375,10 @@ int write (int fd, const void *buffer, unsigned size) {
     e = list_next (e)) 
     {
       of = list_entry(e, struct open_file, file_elem);
-      //printf("of file descriptor: %d\n", of->fd);
       if(of->fd == fd) {
-	if(!(of->f->deny_write))
-	  num_bytes = file_write(of->f, buffer, size); 
-	  //printf("num_bytes: %d\n", num_bytes);
+        if(!(of->f->deny_write)) {
+          num_bytes = file_write(of->f, buffer, size); 
+        }
         break;
       }
     }
@@ -315,12 +387,79 @@ int write (int fd, const void *buffer, unsigned size) {
 	return num_bytes;
 }
 
-void seek (int fd, unsigned position){}
-
-unsigned tell (int fd){
-	return 0;
+void seek (int fd, unsigned position){
+  lock_acquire(&file_lock);
+  struct open_file *of;
+  struct list_elem *e;
+  if(fd < 2) {
+    lock_release(&file_lock);
+    exit(-1);
+  }
+  for(e = list_begin (&thread_current()->open_files); 
+  e != list_end (&thread_current()->open_files);
+  e = list_next (e)) 
+  {
+    of = list_entry(e, struct open_file, file_elem);
+    if(of->fd == fd) {
+      file_seek(of->f, position);
+      break;
+    }
+  }
+  lock_release(&file_lock);
 }
 
-void close (int fd){
+unsigned tell (int fd){
+	off_t next_byte = 0; 
+  struct list_elem* e;
+  struct open_file* of; 
+  lock_acquire(&file_lock); 
+  if(fd < 2) { 
+    lock_release(&file_lock); 
+    exit(-1); 
+  } 
+  for (e = list_begin (&thread_current()->open_files); 
+    e != list_end (&thread_current()->open_files); 
+    e = list_next (e)) 
+    { 
+      of = list_entry(e, struct open_file, file_elem); 
+      if(of->fd == fd) { 
+        next_byte = file_tell(of->f); 
+        break; 
+      } 
+    } 
+  lock_release(&file_lock); 
+  return next_byte;
+}
+
+void close (int fd) {
+  // special cases
+  if (fd == 0 || fd == 1) {
+    exit(-1);
+  }
+
+  lock_acquire(&file_lock);
+  struct open_file *of;
+  struct list_elem *e;
+  bool found;
+
+  found = false;
+  for (e = list_begin (&thread_current()->open_files);
+  e != list_end (&thread_current()->open_files);
+  e = list_next (e))
+  {
+      of = list_entry(e, struct open_file, file_elem);
+      if (of->fd == fd) {
+        file_close(of->f);
+        list_remove(e);
+        palloc_free_page(of);
+        found = true;
+        break;
+      }
+  }
+  if (!found) {
+    lock_release(&file_lock);
+    exit(-1);
+  }
+  lock_release(&file_lock);
 }
 

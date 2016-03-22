@@ -282,6 +282,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
   //printf("\n\nfile %s deny write %d\n\n", file_name, file->deny_write);
   file_deny_write(file);
+  //printf("\n\nhere in load. file: %s\n\n", token);
+  thread_current()->exec_file = file;
   //printf("\n\nfile %s deny write %d\n\n", file_name, file->deny_write);
 
   /* Read and verify executable header. */

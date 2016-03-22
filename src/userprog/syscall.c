@@ -175,6 +175,7 @@ void halt () {
 void exit (int status) {
   struct zombie* z = palloc_get_page(PAL_ZERO); // allocate
   struct list_elem* e;
+  struct list_elem* next;
   struct zombie* reaped;
   struct thread* c;
   struct open_file *of;
@@ -205,16 +206,25 @@ void exit (int status) {
 
   printf("%s: exit(%d)\n", thread_current()->file_name, status);  
   sema_up(&thread_current()->process_sema);
-    // Closing and removing all open files
-  for (e = list_begin (&thread_current()->open_files);
-  e != list_end (&thread_current()->open_files);
-  e = list_next (e))
-  {
-      of = list_entry(e, struct open_file, file_elem);
-      file_close(of->f);
-      list_remove(e);
-  }
 
+    // Closing and removing all open files
+  if(!list_empty(&thread_current()->open_files)) {
+    e = list_begin (&thread_current()->open_files);
+    while(e != list_end (&thread_current()->open_files)) {
+      of = list_entry(e, struct open_file, file_elem);
+      next = list_next(e);
+      list_remove(e);
+      file_close(of->f);
+      palloc_free_page(of);
+      e = next;
+    }
+  } 
+  if(thread_current()->exec_file != NULL) {
+    //printf("\n\nhave exec file. file deny write: %d\n\n", 
+      //thread_current()->exec_file->deny_write);
+    file_deny_write(thread_current()->exec_file);
+    file_close(thread_current()->exec_file);
+  }
   thread_exit();
 }
 
@@ -365,8 +375,8 @@ int write (int fd, const void *buffer, unsigned size) {
     {
       of = list_entry(e, struct open_file, file_elem);
       if(of->fd == fd) {
-          // printf("\n\nfd %d deny write %d\n\n", fd, of->f->deny_write);
         if(!(of->f->deny_write)) {
+          //printf("\n\nfd %d deny write %d\n\n", fd, of->f->deny_write);
           num_bytes = file_write(of->f, buffer, size); 
         }
         break;

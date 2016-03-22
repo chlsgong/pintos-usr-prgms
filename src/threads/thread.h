@@ -145,6 +145,7 @@ struct thread
     struct semaphore process_sema;      /*Block waiting thread until child exits.*/
     struct list_elem child_elem;        /*List element for children list.*/
     int wait_flag;
+    struct file *exec_file;             /*File that is loaded in exec*/
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

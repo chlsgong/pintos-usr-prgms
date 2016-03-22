@@ -213,16 +213,16 @@ void exit (int status) {
     while(e != list_end (&thread_current()->open_files)) {
       of = list_entry(e, struct open_file, file_elem);
       next = list_next(e);
-      list_remove(e);
-      file_close(of->f);
-      palloc_free_page(of);
+      close(of->fd);
       e = next;
     }
   } 
 
   // close the current process' file (executable)
   if(thread_current()->exec_file != NULL) {
+    lock_acquire(&file_lock);
     file_close(thread_current()->exec_file);
+    lock_release(&file_lock);
   }
   thread_exit();
 }
@@ -289,14 +289,16 @@ int open (const char *file){
 }
 
 int filesize (int fd){
-  lock_acquire(&file_lock);
   struct list_elem *e;
   struct open_file *of;
   int size = -1;
+
   if(fd < 2) {
-    lock_release(&file_lock);
     exit(-1);
   }
+
+  lock_acquire(&file_lock);
+
   for (e = list_begin (&thread_current()->open_files); 
    e != list_end (&thread_current()->open_files);
    e = list_next (e)) 
@@ -349,13 +351,15 @@ int write (int fd, const void *buffer, unsigned size) {
   struct list_elem *e;
   struct open_file *of;
 
+  if(!fd) {
+    exit(-1);
+  }
+
   lock_acquire(&file_lock);
   if (!is_valid(buffer)) {
     lock_release(&file_lock);
     exit(-1);
   } 
-  if(!fd)
-    exit(-1);
   if(fd == 1) {
     while(size > 128) {
       size -= 128;
@@ -386,13 +390,15 @@ int write (int fd, const void *buffer, unsigned size) {
 }
 
 void seek (int fd, unsigned position){
-  lock_acquire(&file_lock);
   struct open_file *of;
   struct list_elem *e;
+
   if(fd < 2) {
-    lock_release(&file_lock);
     exit(-1);
   }
+
+  lock_acquire(&file_lock);
+
   for(e = list_begin (&thread_current()->open_files); 
   e != list_end (&thread_current()->open_files);
   e = list_next (e)) 
@@ -410,11 +416,13 @@ unsigned tell (int fd){
 	off_t next_byte = 0; 
   struct list_elem* e;
   struct open_file* of; 
-  lock_acquire(&file_lock); 
+
   if(fd < 2) { 
-    lock_release(&file_lock); 
     exit(-1); 
   } 
+  
+  lock_acquire(&file_lock); 
+
   for (e = list_begin (&thread_current()->open_files); 
     e != list_end (&thread_current()->open_files); 
     e = list_next (e)) 

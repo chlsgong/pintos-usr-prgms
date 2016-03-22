@@ -219,10 +219,9 @@ void exit (int status) {
       e = next;
     }
   } 
+
+  // close the current process' file (executable)
   if(thread_current()->exec_file != NULL) {
-    //printf("\n\nhave exec file. file deny write: %d\n\n", 
-      //thread_current()->exec_file->deny_write);
-    file_deny_write(thread_current()->exec_file);
     file_close(thread_current()->exec_file);
   }
   thread_exit();
@@ -376,7 +375,6 @@ int write (int fd, const void *buffer, unsigned size) {
       of = list_entry(e, struct open_file, file_elem);
       if(of->fd == fd) {
         if(!(of->f->deny_write)) {
-          //printf("\n\nfd %d deny write %d\n\n", fd, of->f->deny_write);
           num_bytes = file_write(of->f, buffer, size); 
         }
         break;

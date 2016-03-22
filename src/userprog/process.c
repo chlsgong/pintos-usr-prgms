@@ -280,11 +280,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
-  //printf("\n\nfile %s deny write %d\n\n", file_name, file->deny_write);
+    
   file_deny_write(file);
-  //printf("\n\nhere in load. file: %s\n\n", token);
   thread_current()->exec_file = file;
-  //printf("\n\nfile %s deny write %d\n\n", file_name, file->deny_write);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -538,7 +536,6 @@ setup_stack (void **esp, const char* file_name)
 
   *esp = my_esp;
 
-  // hex_dump(*esp, *esp, PHYS_BASE - *esp, 1);
   return success;
 }
 

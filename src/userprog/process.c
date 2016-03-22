@@ -280,8 +280,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+  //printf("\n\nfile %s deny write %d\n\n", file_name, file->deny_write);
   file_deny_write(file);
-  printf("file %s\n", file_name);
+  //printf("\n\nfile %s deny write %d\n\n", file_name, file->deny_write);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -366,7 +367,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  // file_close (file);
   return success;
 }
 

@@ -256,9 +256,6 @@ bool remove (const char *file){
 int open (const char *file){
   struct file* f;
   struct open_file* of;
-  char *token, *save_ptr;
-  char file_cpy[strlen(file)+1];
-  int cnt = 0;  
 
   lock_acquire(&file_lock);
   if (!is_valid(file)) {
@@ -271,14 +268,6 @@ int open (const char *file){
     lock_release(&file_lock);
     return -1;
   }
-
-  strlcpy(file_cpy, file, strlen(file)+1);
-  for (token = strtok_r (file_cpy, ".", &save_ptr); token != NULL; 
-    token = strtok_r (NULL, ".", &save_ptr)) {
-    cnt++;
-  }
-  if(cnt == 1)
-    file_deny_write(f);
   
   of = palloc_get_page(PAL_ZERO);
   of->f = f;
@@ -376,6 +365,7 @@ int write (int fd, const void *buffer, unsigned size) {
     {
       of = list_entry(e, struct open_file, file_elem);
       if(of->fd == fd) {
+          // printf("\n\nfd %d deny write %d\n\n", fd, of->f->deny_write);
         if(!(of->f->deny_write)) {
           num_bytes = file_write(of->f, buffer, size); 
         }

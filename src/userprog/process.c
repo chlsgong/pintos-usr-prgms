@@ -282,7 +282,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
     
   file_deny_write(file);
-  //printf("\n\ncalling load: %s\n\n", token);
   thread_current()->exec_file = file;
 
   /* Read and verify executable header. */
@@ -511,6 +510,8 @@ setup_stack (void **esp, const char* file_name)
     // create array
     argv[argc] = token;
     argc++;
+    if(argc >= 32)
+      break;
   }
 
   my_esp = (char*) *esp;

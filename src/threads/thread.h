@@ -83,9 +83,9 @@ typedef int tid_t;
 
 /* Zombie. */
 struct zombie {
-  tid_t tid;
-  int exit_status;
-  struct list_elem z_elem;
+  tid_t tid;                  /* The tid of the zombie child */
+  int exit_status;            /* The exit status of zombie child */
+  struct list_elem z_elem;    /* Places the zombie in the parent's zombie list */
 };
 
 /* An open file. */
@@ -98,9 +98,9 @@ struct file
 
 /* An open file with its file descriptor. */
 struct open_file {
-  struct file* f;
-  int fd;
-  struct list_elem file_elem;
+  struct file* f;             /* The open file */
+  int fd;                     /* The file descriptor for file f */
+  struct list_elem file_elem; /* Places the open_file in a thread's open_files list */
 };
 
 /* The `elem' member has a dual purpose.  It can be an element in

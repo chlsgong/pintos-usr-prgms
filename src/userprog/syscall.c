@@ -44,6 +44,7 @@ void syscall_init (void) {
 static void
 syscall_handler (struct intr_frame *f) 
 {
+  /*Jasmine Drove Here*/
   int status;
   const char *file;
   pid_t pid;
@@ -94,6 +95,7 @@ syscall_handler (struct intr_frame *f)
   		file = *(char **)(f->esp + 4);
   		f->eax = remove(file);
   		break;
+      /*Rebecca Drove Here*/
   	case(SYS_OPEN):
   		/*Read from stack once, check if file is valid*/
       valid_pointer(f->esp + 4);
@@ -152,7 +154,12 @@ syscall_handler (struct intr_frame *f)
   }
 }
 
+/*This Function checks if the given pointer
+is valid. That is, check if the pointer is NULL, 
+a not a user address, and if the address in virtual 
+memory is unmapped.*/
 bool is_valid(const void *pointer) {
+  /*Charles Drove Here*/
   struct thread *cur_thread = thread_current();
   if(pointer == NULL || is_kernel_vaddr(pointer) ||
     pagedir_get_page (cur_thread->pagedir, pointer) == NULL) {
@@ -161,18 +168,20 @@ bool is_valid(const void *pointer) {
   return 1;
 }
 
-
 void valid_pointer(const void *pointer) {
+  /*Charles Drove Here*/
   if (!is_valid(pointer)) {
     exit(-1);
   }
 }
 
 void halt () {
+  /*Charles Drove Here*/
 	shutdown_power_off();
 }
 
 void exit (int status) {
+  /*Jorge Drove Here*/
   struct zombie* z = palloc_get_page(PAL_ZERO); // allocate
   struct list_elem* e;
   struct list_elem* next;
@@ -182,8 +191,10 @@ void exit (int status) {
 
   z->exit_status = status;
   z->tid = thread_current()->tid;
-  list_push_back(&thread_current()->parent_process->zombies, &z->z_elem); // add to parent's zombie list
-  list_remove(&thread_current()->child_elem); // remove from parent's children list
+  // add to parent's zombie list
+  list_push_back(&thread_current()->parent_process->zombies, &z->z_elem);
+  // remove from parent's children list 
+  list_remove(&thread_current()->child_elem); 
 
   // set all children's parent to null
   for (e = list_begin (&thread_current()->children); 
@@ -194,6 +205,7 @@ void exit (int status) {
     c->parent_process = NULL;
   }
 
+  /*Rebecca Drove Here*/
   // deallocate all its zombie children
   if(!list_empty(&thread_current()->zombies)) {
     e = list_begin (&thread_current()->zombies);
@@ -228,6 +240,7 @@ void exit (int status) {
 }
 
 pid_t exec (const char *file) {
+  /*Jasmine Drove here*/
   valid_pointer(file);
   process_execute(file);
   if(thread_current()->success) {
@@ -237,10 +250,12 @@ pid_t exec (const char *file) {
 }
 
 int wait (pid_t pid) {
+  /*Jasmine Drove here*/
 	return process_wait((tid_t) pid);
 }
 
 bool create (const char *file, unsigned initial_size){
+  /*Rebecca Drove here*/
   lock_acquire(&file_lock);
   if (!is_valid(file)) {
     lock_release(&file_lock);
@@ -252,6 +267,7 @@ bool create (const char *file, unsigned initial_size){
 }
 
 bool remove (const char *file){
+  /*Jasmine Drove here*/
   lock_acquire(&file_lock);
   if (!is_valid(file)) {
     lock_release(&file_lock);
@@ -263,6 +279,7 @@ bool remove (const char *file){
 }
 
 int open (const char *file){
+  /*Charles Drove Here*/
   struct file* f;
   struct open_file* of;
 
@@ -289,6 +306,7 @@ int open (const char *file){
 }
 
 int filesize (int fd){
+  /*Jasmine Drove Here*/
   struct list_elem *e;
   struct open_file *of;
   int size = -1;
@@ -314,6 +332,7 @@ int filesize (int fd){
 }
 
 int read (int fd, void *buffer, unsigned size){
+  /*Charles Drove here*/
   int num_bytes = -1;
   struct list_elem* e;
   struct open_file* of;
@@ -346,6 +365,7 @@ int read (int fd, void *buffer, unsigned size){
 }
 
 int write (int fd, const void *buffer, unsigned size) {
+  /*Jorge Drove here*/
   // may have to break up buffer if too long
   int num_bytes = 0;
   struct list_elem *e;
@@ -371,6 +391,7 @@ int write (int fd, const void *buffer, unsigned size) {
     putbuf(buffer, (int) size);
     num_bytes = written_chars();
   }
+  /*Chalres Drove Here*/
   else {
     for (e = list_begin (&thread_current()->open_files); 
     e != list_end (&thread_current()->open_files);
@@ -390,6 +411,7 @@ int write (int fd, const void *buffer, unsigned size) {
 }
 
 void seek (int fd, unsigned position){
+  /*Jorge Drove here*/
   struct open_file *of;
   struct list_elem *e;
 
@@ -413,6 +435,7 @@ void seek (int fd, unsigned position){
 }
 
 unsigned tell (int fd){
+  /*Charlesw Drove here*/
 	off_t next_byte = 0; 
   struct list_elem* e;
   struct open_file* of; 
@@ -438,6 +461,7 @@ unsigned tell (int fd){
 }
 
 void close (int fd) {
+  /*Rebecca Drove here*/
   // special cases
   if (fd == 0 || fd == 1) {
     exit(-1);

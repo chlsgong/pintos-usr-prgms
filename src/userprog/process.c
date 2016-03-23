@@ -28,6 +28,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
+  /*Jorge Drove Here*/
   char *fn_copy;
   tid_t tid;
 
@@ -53,6 +54,7 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
+  /*Jasmine Drove here*/
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
@@ -95,6 +97,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
+  /*Charles, Jorge Drove Here*/
   struct list_elem *e;
   struct thread* child;
   struct zombie *z;
@@ -121,6 +124,8 @@ process_wait (tid_t child_tid)
       }
   }
   intr_set_level(old);
+
+  /*Rebecca, Jasmine Drove Here*/
   // check if inside zombie list
   for (e = list_begin (&thread_current()->zombies); 
        e != list_end (&thread_current()->zombies);
@@ -270,6 +275,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
+  /*Jorge Drove Here*/
   strlcpy(file_cpy, file_name, strlen(file_name)+1);
   token = strtok_r (file_cpy, " ", &save_ptr);
   file = filesys_open (token);
@@ -484,6 +490,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack (void **esp, const char* file_name) 
 {
+  /*Charles Drove here*/
   uint8_t *kpage;
   bool success = false;
   char *token, *save_ptr, *my_esp;
@@ -514,7 +521,7 @@ setup_stack (void **esp, const char* file_name)
     if(argc >= 32)
       break;
   }
-
+  /*Jasmine Drove Here*/
   my_esp = (char*) *esp;
   for(i = argc-1; i >= 0; i--) {
     token_len = strlen(argv[i]) + 1;
@@ -530,6 +537,7 @@ setup_stack (void **esp, const char* file_name)
     my_esp -= 4;
     memcpy(my_esp, &argv[i], sizeof(int)); // push address onto stack
   }
+  /*Rebecca Drove Here*/
   address = (int *) my_esp; // save address of argv
   my_esp -= 4;
   memcpy(my_esp, &address, sizeof(int)); // push address of argv onto stack

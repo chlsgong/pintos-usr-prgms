@@ -81,12 +81,14 @@ typedef int tid_t;
    THREAD_MAGIC.)
 */
 
+/* Zombie. */
 struct zombie {
   tid_t tid;
   int exit_status;
   struct list_elem z_elem;
 };
 
+/* An open file. */
 struct file
 {
   struct inode *inode;        /* File's inode. */
@@ -94,6 +96,7 @@ struct file
   bool deny_write;            /* Has file_deny_write() been called? */
 };
 
+/* An open file with its file descriptor. */
 struct open_file {
   struct file* f;
   int fd;
@@ -132,20 +135,20 @@ struct thread
     int old_priority;                   /*Original thread's priority*/
     int donate;                         /*If set, do multilevel donation*/
     struct thread* new_proc;            /*The new process that was created*/
-    int success;
-    int child_pid;
+    int success;                        /*Success state of most recent exec() call*/
+    int child_pid;                      /*PID of most recent child*/
     struct list children;               /*Alive children*/
     struct list zombies;                /*Dead children*/
-    int fd_cnt;
-    struct list open_files;
+    int fd_cnt;                         /*File descriptor counter*/
+    struct list open_files;             /*List of all files opened by this thread*/
 
     /* For child threads */
     struct thread *parent_process;      /*The parent process that created this thread.*/
     struct semaphore exec_sema;         /*Wait for child to successfully load new program.*/
     struct semaphore process_sema;      /*Block waiting thread until child exits.*/
     struct list_elem child_elem;        /*List element for children list.*/
-    int wait_flag;
-    struct file *exec_file;             /*File that is loaded in exec*/
+    int wait_flag;                      /*Set when wait() is called.*/
+    struct file *exec_file;             /*File that is loaded in exec().*/
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

@@ -282,7 +282,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
     
   file_deny_write(file);
-  //printf("\n\ncalling load: %s\n\n", token);
   thread_current()->exec_file = file;
 
   /* Read and verify executable header. */
@@ -506,17 +505,20 @@ setup_stack (void **esp, const char* file_name)
 
   strlcpy(file_cpy, file_name, strlen(file_name)+1);
   argc = 0;
+  // tokenize command line
   for (token = strtok_r (file_cpy, " ", &save_ptr); token != NULL; 
     token = strtok_r (NULL, " ", &save_ptr)) {
     // create array
     argv[argc] = token;
     argc++;
+    if(argc >= 32)
+      break;
   }
 
   my_esp = (char*) *esp;
   for(i = argc-1; i >= 0; i--) {
     token_len = strlen(argv[i]) + 1;
-    arg_bytes += token_len;
+    arg_bytes += token_len; // update total bytes
     my_esp -= token_len; // allocate token size
     strlcpy(my_esp, argv[i], token_len); // push arg onto stack
     address = (int *) my_esp;
@@ -528,11 +530,11 @@ setup_stack (void **esp, const char* file_name)
     my_esp -= 4;
     memcpy(my_esp, &argv[i], sizeof(int)); // push address onto stack
   }
-  address = (int *) my_esp;
+  address = (int *) my_esp; // save address of argv
   my_esp -= 4;
-  memcpy(my_esp, &address, sizeof(int));
+  memcpy(my_esp, &address, sizeof(int)); // push address of argv onto stack
   my_esp -= 4;
-  *my_esp = argc;
+  *my_esp = argc; // push argc
   my_esp -= 4;
 
   *esp = my_esp;

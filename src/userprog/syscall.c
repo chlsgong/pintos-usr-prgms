@@ -182,24 +182,28 @@ void halt () {
 
 void exit (int status) {
   /*Jorge Drove Here*/
-  struct zombie* z = palloc_get_page(PAL_ZERO); // allocate
+  struct zombie* z;
   struct list_elem* e;
   struct list_elem* next;
   struct zombie* reaped;
   struct thread* c;
   struct open_file *of;
 
-  z->exit_status = status;
-  z->tid = thread_current()->tid;
-  // add to parent's zombie list
-  list_push_back(&thread_current()->parent_process->zombies, &z->z_elem);
-  // remove from parent's children list 
-  list_remove(&thread_current()->child_elem); 
+  // if parent process hasn't already exited
+  if(thread_current()->parent_process != NULL) {
+    z = palloc_get_page(PAL_ZERO); // allocate
+    z->exit_status = status;
+    z->tid = thread_current()->tid;
+    // add to parent's zombie list
+    list_push_back(&thread_current()->parent_process->zombies, &z->z_elem);
+    // remove from parent's children list 
+    list_remove(&thread_current()->child_elem);
+  }
 
   // set all children's parent to null
   for (e = list_begin (&thread_current()->children); 
-   e != list_end (&thread_current()->children);
-   e = list_next (e)) 
+    e != list_end (&thread_current()->children);
+    e = list_next (e)) 
   {
     c = list_entry(e, struct thread, child_elem);
     c->parent_process = NULL;
